@@ -8118,6 +8118,20 @@ static void get_params(struct task_struct *p, struct sched_attr *attr)
 }
 
 /**
+ * CW1
+ * sys_ancestor_pid - get PID of the nth ancestor of process
+ * @pid: pid of the process
+ * @n: nth ancestor
+ *
+ * Return: PID on success. Error otherwise.
+ */
+SYSCALL_DEFINE2(ancestor_pid, pid_t, pid, unsigned int, n)
+{
+	printk(KERN_INFO "Ancestor: %d %d %d\n", pid, n, current->pid);
+	return 0;
+}
+
+/**
  * sys_sched_setscheduler - set/change the scheduler policy and RT priority
  * @pid: the pid in question.
  * @policy: new policy.

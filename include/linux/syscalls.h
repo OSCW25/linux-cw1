@@ -1191,6 +1191,9 @@ asmlinkage long sys_old_mmap(struct mmap_arg_struct __user *arg);
  */
 asmlinkage long sys_ni_syscall(void);
 
+/* CW1 */
+asmlinkage long sys_ancestor_pid(pid_t pid, unsigned int n);
+
 #endif /* CONFIG_ARCH_HAS_SYSCALL_WRAPPER */
 
 asmlinkage long sys_ni_posix_timers(void);
