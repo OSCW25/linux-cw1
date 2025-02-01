@@ -8127,8 +8127,34 @@ static void get_params(struct task_struct *p, struct sched_attr *attr)
  */
 SYSCALL_DEFINE2(ancestor_pid, pid_t, pid, unsigned int, n)
 {
-	printk(KERN_INFO "Ancestor: %d %d %d\n", pid, n, current->pid);
-	return 0;
+	struct task_struct *task;
+	long ancestor_pid;
+
+	if (!pid)
+		pid = current->pid;
+
+	if (!n)
+		return pid;
+
+	rcu_read_lock();
+    
+	task = find_task_by_vpid(pid);
+	if (!task)
+		goto no_such_process;
+
+	while (n--) {
+		if (!task->real_parent || task->real_parent == task)
+			goto no_such_process;
+		task = task->real_parent;
+  }
+
+	ancestor_pid = (long)task->pid;
+	rcu_read_unlock();
+    
+	return ancestor_pid;
+no_such_process:
+	rcu_read_unlock();
+	return -ESRCH;
 }
 
 /**
