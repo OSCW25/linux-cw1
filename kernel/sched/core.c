@@ -7352,6 +7352,41 @@ int can_nice(const struct task_struct *p, const int nice)
 	return is_nice_reduction(p, nice) || capable(CAP_SYS_NICE);
 }
 
+static long do_propagate_nice(struct task_struct *p, int increment)
+{
+	long nice, retval;
+	struct task_struct *child;
+
+	/*
+	 * Setpriority might change our priority at the same moment.
+	 * We don't have to worry. Conceptually one call occurs first
+	 * and we have a single winner.
+	 */
+	increment = clamp(increment, -NICE_WIDTH, NICE_WIDTH);
+	nice = task_nice(p) + increment;
+
+	nice = clamp_val(nice, MIN_NICE, MAX_NICE);
+	if (increment < 0 && !can_nice(p, nice))
+		return -EPERM;
+
+	retval = security_task_setnice(p, nice);
+	if (retval)
+		return retval;
+
+	set_user_nice(p, nice);
+	if (increment > 1) {
+		list_for_each_entry(child, &p->children, sibling) {
+			retval |= do_propagate_nice(child, (increment / 2));
+		}
+	}
+	return retval;
+}
+
+SYSCALL_DEFINE1(propagate_nice, int, increment)
+{
+	return do_propagate_nice(current, increment);
+}
+
 #ifdef __ARCH_WANT_SYS_NICE
 
 /*

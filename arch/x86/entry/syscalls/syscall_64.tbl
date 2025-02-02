@@ -387,6 +387,7 @@
 
 # CW1
 463	common	ancestor_pid	sys_ancestor_pid
+464	common	propagate_nice	sys_propagate_nice
 
 #
 # Due to a historical design error, certain syscalls are numbered differently

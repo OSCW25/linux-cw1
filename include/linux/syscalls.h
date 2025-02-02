@@ -1193,6 +1193,7 @@ asmlinkage long sys_ni_syscall(void);
 
 /* CW1 */
 asmlinkage long sys_ancestor_pid(pid_t pid, unsigned int n);
+asmlinkage long sys_propagate_nice(pid_t pid, int niceval);
 
 #endif /* CONFIG_ARCH_HAS_SYSCALL_WRAPPER */
 
