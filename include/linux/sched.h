@@ -790,6 +790,10 @@ struct task_struct {
 	 */
 	int				recent_used_cpu;
 	int				wake_cpu;
+
+	/* CW1 */
+	cpumask_t used_cpus;
+	unsigned int epoch_ticks;
 #endif
 	int				on_rq;
 

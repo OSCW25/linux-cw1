@@ -118,6 +118,9 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(sched_compute_energy_tp);
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
+/* CW1 - an epoch equals 10 seconds */
+#define TICKS_PER_EPOCH (10 * HZ)
+
 #ifdef CONFIG_SCHED_DEBUG
 /*
  * Debugging: various feature bits
@@ -3397,6 +3400,7 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 		perf_event_task_migrate(p);
 	}
 
+	cpumask_set_cpu(new_cpu, &p->used_cpus);
 	__set_task_cpu(p, new_cpu);
 }
 
@@ -4535,6 +4539,9 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->se.slice			= sysctl_sched_base_slice;
 	INIT_LIST_HEAD(&p->se.group_node);
 
+	cpumask_clear(&p->used_cpus);
+	p->epoch_ticks = 0;
+
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	p->se.cfs_rq			= NULL;
 #endif
@@ -4838,6 +4845,7 @@ void sched_cgroup_fork(struct task_struct *p, struct kernel_clone_args *kargs)
 	 * We're setting the CPU for the first time, we don't migrate,
 	 * so use __set_task_cpu().
 	 */
+	cpumask_set_cpu(smp_processor_id(), &p->used_cpus);
 	__set_task_cpu(p, smp_processor_id());
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
@@ -4890,6 +4898,7 @@ void wake_up_new_task(struct task_struct *p)
 	 */
 	p->recent_used_cpu = task_cpu(p);
 	rseq_migrate(p);
+	cpumask_set_cpu(task_cpu(p), &p->used_cpus);
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), WF_FORK));
 #endif
 	rq = __task_rq_lock(p, &rf);
@@ -5688,6 +5697,13 @@ void sched_tick(void)
 	calc_global_load_tick(rq);
 	sched_core_tick(rq);
 	task_tick_mm_cid(rq, curr);
+
+	curr->epoch_ticks++;
+	if (curr->epoch_ticks >= TICKS_PER_EPOCH) {
+		curr->epoch_ticks = 0;
+		cpumask_clear(&curr->used_cpus);
+	}
+	cpumask_set_cpu(cpu, &curr->used_cpus);
 
 	rq_unlock(rq, &rf);
 
@@ -9379,6 +9395,7 @@ void __init init_idle(struct task_struct *idle, int cpu)
 	 * Silence PROVE_RCU
 	 */
 	rcu_read_lock();
+	cpumask_set_cpu(cpu, &idle->used_cpus);
 	__set_task_cpu(idle, cpu);
 	rcu_read_unlock();
 
