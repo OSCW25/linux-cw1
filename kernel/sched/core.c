@@ -3400,7 +3400,6 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 		perf_event_task_migrate(p);
 	}
 
-	cpumask_set_cpu(new_cpu, &p->used_cpus);
 	__set_task_cpu(p, new_cpu);
 }
 
@@ -4539,9 +4538,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->se.slice			= sysctl_sched_base_slice;
 	INIT_LIST_HEAD(&p->se.group_node);
 
-	cpumask_clear(&p->used_cpus);
-	p->epoch_ticks = 0;
-
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	p->se.cfs_rq			= NULL;
 #endif
@@ -4845,7 +4841,6 @@ void sched_cgroup_fork(struct task_struct *p, struct kernel_clone_args *kargs)
 	 * We're setting the CPU for the first time, we don't migrate,
 	 * so use __set_task_cpu().
 	 */
-	cpumask_set_cpu(smp_processor_id(), &p->used_cpus);
 	__set_task_cpu(p, smp_processor_id());
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
@@ -4898,7 +4893,6 @@ void wake_up_new_task(struct task_struct *p)
 	 */
 	p->recent_used_cpu = task_cpu(p);
 	rseq_migrate(p);
-	cpumask_set_cpu(task_cpu(p), &p->used_cpus);
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), WF_FORK));
 #endif
 	rq = __task_rq_lock(p, &rf);
@@ -5697,13 +5691,6 @@ void sched_tick(void)
 	calc_global_load_tick(rq);
 	sched_core_tick(rq);
 	task_tick_mm_cid(rq, curr);
-
-	curr->epoch_ticks++;
-	if (curr->epoch_ticks >= TICKS_PER_EPOCH) {
-		curr->epoch_ticks = 0;
-		cpumask_clear(&curr->used_cpus);
-	}
-	cpumask_set_cpu(cpu, &curr->used_cpus);
 
 	rq_unlock(rq, &rf);
 
@@ -7368,39 +7355,16 @@ int can_nice(const struct task_struct *p, const int nice)
 	return is_nice_reduction(p, nice) || capable(CAP_SYS_NICE);
 }
 
-static long do_propagate_nice(struct task_struct *p, int increment)
-{
-	long nice, retval;
-	struct task_struct *child;
-
-	/*
-	 * Setpriority might change our priority at the same moment.
-	 * We don't have to worry. Conceptually one call occurs first
-	 * and we have a single winner.
-	 */
-	increment = clamp(increment, -NICE_WIDTH, NICE_WIDTH);
-	nice = task_nice(p) + increment;
-
-	nice = clamp_val(nice, MIN_NICE, MAX_NICE);
-	if (increment < 0 && !can_nice(p, nice))
-		return -EPERM;
-
-	retval = security_task_setnice(p, nice);
-	if (retval)
-		return retval;
-
-	set_user_nice(p, nice);
-	if (increment > 1) {
-		list_for_each_entry(child, &p->children, sibling) {
-			retval |= do_propagate_nice(child, (increment / 2));
-		}
-	}
-	return retval;
-}
-
+/**
+ * CW1
+ * sys_propagate_nice - trickle-down nice-increment to descendants
+ * @increment: nice-increment for calling process
+ *
+ * Return: 0 on success. Error otherwise.
+ */
 SYSCALL_DEFINE1(propagate_nice, int, increment)
 {
-	return do_propagate_nice(current, increment);
+	return 0;
 }
 
 #ifdef __ARCH_WANT_SYS_NICE
@@ -8178,34 +8142,7 @@ static void get_params(struct task_struct *p, struct sched_attr *attr)
  */
 SYSCALL_DEFINE2(ancestor_pid, pid_t, pid, unsigned int, n)
 {
-	struct task_struct *task;
-	long ancestor_pid;
-
-	if (!pid)
-		pid = current->pid;
-
-	if (!n)
-		return pid;
-
-	rcu_read_lock();
-    
-	task = find_task_by_vpid(pid);
-	if (!task)
-		goto no_such_process;
-
-	while (n--) {
-		if (!task->real_parent || task->real_parent == task)
-			goto no_such_process;
-		task = task->real_parent;
-  }
-
-	ancestor_pid = (long)task->pid;
-	rcu_read_unlock();
-    
-	return ancestor_pid;
-no_such_process:
-	rcu_read_unlock();
-	return -ESRCH;
+	return 0;
 }
 
 /**
@@ -9395,7 +9332,6 @@ void __init init_idle(struct task_struct *idle, int cpu)
 	 * Silence PROVE_RCU
 	 */
 	rcu_read_lock();
-	cpumask_set_cpu(cpu, &idle->used_cpus);
 	__set_task_cpu(idle, cpu);
 	rcu_read_unlock();
 
