@@ -7372,28 +7372,22 @@ static long do_propagate_nice(struct task_struct *p, int increment)
 {
 	long nice, retval;
 	struct task_struct *child;
+	int effective_incr;
 
-	/*
-	 * Setpriority might change our priority at the same moment.
-	 * We don't have to worry. Conceptually one call occurs first
-	 * and we have a single winner.
-	 */
-	increment = clamp(increment, -NICE_WIDTH, NICE_WIDTH);
-	nice = task_nice(p) + increment;
+	if (increment <= 0)
+		return -EINVAL;
 
+	effective_incr = clamp(increment, -NICE_WIDTH, NICE_WIDTH);
+	nice = task_nice(p) + effective_incr;
 	nice = clamp_val(nice, MIN_NICE, MAX_NICE);
-	if (increment < 0 && !can_nice(p, nice))
-		return -EPERM;
 
 	retval = security_task_setnice(p, nice);
 	if (retval)
 		return retval;
 
 	set_user_nice(p, nice);
-	if (increment > 1) {
-		list_for_each_entry(child, &p->children, sibling) {
-			retval |= do_propagate_nice(child, (increment / 2));
-		}
+	list_for_each_entry(child, &p->children, sibling) {
+		retval |= do_propagate_nice(child, (increment / 2));
 	}
 	return retval;
 }
